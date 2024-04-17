@@ -198,10 +198,17 @@ class Hotspot:
                 else:
                     tn = tn + 1
         
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
-        f1 = (2*tp) / (2*tp + fn + fp)
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
+        try:
+            accuracy = (tp + tn) / (tp + tn + fp + fn)
+            f1 = (2*tp) / (2*tp + fn + fp)
+            precision = tp / (tp + fp)
+            recall = tp / (tp + fn)
+        except ZeroDivisionError:
+            if(tp + fn == 0):
+                print('ERROR: No positive examples in the dataset. Check the y_cut and data_df for errors.')
+            else:
+                print('ERROR: ZeroDivisionError in accuracy calculation.  Check the data_df for errors.')
+            raise
 
         # Weights the confusion matrix to calculate the weighted statistics
         tp = tp * self.class_weight[1]
