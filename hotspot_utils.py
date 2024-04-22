@@ -10,7 +10,6 @@ from itertools import repeat
 import random
 
 
-
 def threshold_generation(data_df:pd.DataFrame, class_weight:dict, evaluation_method:str, x_labelname_dict:dict, features:list[str] = ['empty']) -> list[Threshold]:
     """
     Given the master dataframe and some parameters, return the best threshold in each feature.
@@ -52,6 +51,24 @@ def threshold_generation(data_df:pd.DataFrame, class_weight:dict, evaluation_met
         all_thresholds.append(temp_threshold)
     return all_thresholds
 
+
+def hs_next_thresholds_fast(hs:Hotspot, all_thresholds:list[Threshold]) -> list[Hotspot]:
+    """
+    Given a hotspot and a list of thresholds, return a list of hotspots with each threshold added to the hotspot.
+
+    :hs: Hotspot to add additional thresholds to
+    :all_thresholds: List of thresholds to add to the hotspot
+    """
+    
+    all_hotspots = []
+
+    for thresh in all_thresholds:
+        fresh_thresh = copy.deepcopy(thresh)
+        temp_hs = copy.deepcopy(hs)
+        temp_hs.add_threshold(fresh_thresh)
+        all_hotspots.append(temp_hs)
+
+    return all_hotspots
 
 def hs_next_thresholds(hs:Hotspot, data_df:pd.DataFrame, class_weight:dict, x_labelname_dict:dict, features:list[str] = ['empty']) -> list[Hotspot]:
     """
