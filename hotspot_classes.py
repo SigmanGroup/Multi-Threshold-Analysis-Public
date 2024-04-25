@@ -222,9 +222,8 @@ class Hotspot:
         
         weighted_accuracy = (tp + tn) / (tp + tn + fp + fn)
 
-        B = (1 + self.class_weight[1]**2)
         try:
-            weighted_f1 = B * (precision*recall) / ((B * precision) + recall)
+            weighted_f1 = (2*tp) / (2*tp + fn + fp)
         except ZeroDivisionError:
             weighted_f1 = 0
 
@@ -259,7 +258,7 @@ class Hotspot:
         
         weighted_accuracy = (tp + tn) / (tp + tn + fp + fn)
         weighted_f1 = (2*tp) / (2*tp + fn + fp)
-        
+
         # Sets self.accuracy to the accuracy statistic in evaluation_method
         self.train_accuracy_dict = {'accuracy':float(accuracy), 'weighted_accuracy':float(weighted_accuracy), 'f1':float(f1), 'weighted_f1':float(weighted_f1)}
         
