@@ -185,7 +185,6 @@ class Hotspot:
 
         tp,tn,fp,fn = 0,0,0,0 # True Positive, True Negative, False Positive, False Negative
         
-        # i is the kraken ligand ID in my main project, but I'm not sure what to call it more generally
         for i in self.data_df.index:
             if (self.data_df.loc[i, 'y_class'] == 1):
                 if(all(self.__is_inside(i))):
@@ -201,14 +200,19 @@ class Hotspot:
         try:
             accuracy = (tp + tn) / (tp + tn + fp + fn)
             f1 = (2*tp) / (2*tp + fn + fp)
-            precision = tp / (tp + fp)
             recall = tp / (tp + fn)
+            precision = tp / (tp + fp)
         except ZeroDivisionError:
             if(tp + fn == 0):
                 print('ERROR: No positive examples in the dataset. Check the y_cut and data_df for errors.')
+                raise
+            if(tp + fp == 0):
+                # This happens if a combination of thresholds predicts no positive examples
+                # This is not a problem, but does break the math for precision
+                precision = 0
             else:
                 print('ERROR: ZeroDivisionError in accuracy calculation.  Check the data_df for errors.')
-            raise
+                raise
 
         # Weights the confusion matrix to calculate the weighted statistics
         tp = tp * self.class_weight[1]
@@ -217,12 +221,16 @@ class Hotspot:
         fn = fn * self.class_weight[1]
         
         weighted_accuracy = (tp + tn) / (tp + tn + fp + fn)
+
         B = (1 + self.class_weight[1]**2)
-        weighted_f1 = B * (precision*recall) / ((B * precision) + recall)
-        
+        try:
+            weighted_f1 = B * (precision*recall) / ((B * precision) + recall)
+        except ZeroDivisionError:
+            weighted_f1 = 0
+
         # Sets self.accuracy to the accuracy statistic in evaluation_method
-        self.accuracy_dict = {'accuracy':accuracy, 'weighted_accuracy':weighted_accuracy, 'f1':f1, 'weighted_f1':weighted_f1,
-                             'precision':precision, 'recall':recall}
+        self.accuracy_dict = {'accuracy':float(accuracy), 'weighted_accuracy':float(weighted_accuracy), 'f1':float(f1), 'weighted_f1':float(weighted_f1),
+                             'precision':float(precision), 'recall':float(recall)}
         self.accuracy = self.accuracy_dict[self.evaluation_method]
     
     def __set_train_test_accuracy(self):
@@ -253,7 +261,7 @@ class Hotspot:
         weighted_f1 = (2*tp) / (2*tp + fn + fp)
         
         # Sets self.accuracy to the accuracy statistic in evaluation_method
-        self.train_accuracy_dict = {'accuracy':accuracy, 'weighted_accuracy':weighted_accuracy, 'f1':f1, 'weighted_f1':weighted_f1}
+        self.train_accuracy_dict = {'accuracy':float(accuracy), 'weighted_accuracy':float(weighted_accuracy), 'f1':float(f1), 'weighted_f1':float(weighted_f1)}
         
         # If there is a test set, find its accuracy
         if(len(self.test_set) > 0):
@@ -287,7 +295,7 @@ class Hotspot:
             weighted_f1 = 0
         
         # Sets self.accuracy to the accuracy statistic in evaluation_method
-        self.test_accuracy_dict = {'accuracy':accuracy, 'weighted_accuracy':weighted_accuracy, 'f1':f1, 'weighted_f1':weighted_f1}
+        self.test_accuracy_dict = {'accuracy':float(accuracy), 'weighted_accuracy':float(weighted_accuracy), 'f1':float(f1), 'weighted_f1':float(weighted_f1)}
 
     def __get_threshold_space(self, threshold: 'Threshold') -> list[int]:
         """
@@ -387,5 +395,5 @@ class Hotspot:
         print(f'Weighted Accuracy: {a_weighted_accuracy:.3f}   {tr_weighted_accuracy:.3f}   {te_weighted_accuracy:.3f}')
         print(f'               F1: {a_f1:.3f}   {tr_f1:.3f}   {te_f1:.3f}')
         print(f'      Weighted F1: {a_weighted_f1:.3f}   {tr_weighted_f1:.3f}   {te_weighted_f1:.3f}\n')
-        print(f'        Precision: {a_precision:.3}')
+        print(f'        Precision: {a_precision:.3f}')
         print(f'           Recall: {a_recall:.3f}')
