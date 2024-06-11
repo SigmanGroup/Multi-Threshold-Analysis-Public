@@ -30,7 +30,7 @@ class Threshold:
         self.added_accuracy = 0
     
     def __str__(self):
-        return f'{self.feature_label} {self.feature_name} {self.operator} {self.cut_value:.3f} with Added {self.evaluation_method} of {self.added_accuracy:.3f}'
+        return f'{self.feature_label} {self.feature_name} {self.operator} {self.cut_value:.3f} with added {self.evaluation_method} of {self.added_accuracy:.3f}'
     
 
 class Hotspot:
