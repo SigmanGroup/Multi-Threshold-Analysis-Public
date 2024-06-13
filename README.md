@@ -4,10 +4,10 @@ DecisionTreeClassifier and yields models that can be both interpretable and pred
 
 # Installation
 A conda environment is provided in the multithreshold_env.yml or multithreshold_env.txt files. To create the environment, run\
-`conda env create --file=multithreshold_env.yml`\
+`conda env create --file=multithreshold_env_win.yml`\
 or\
-`conda env create --file=multithreshold_env.txt`\
-and set the multithreshold environment as the kernel for the Jupyter notebook.
+`conda env create --file=multithreshold_env_lin.yml`\
+depending on your opperating system and set the multithreshold environment as the kernel for the Jupyter notebook.
 
 # Requirements
 If you'd prefer to create your own environment, here is a list of known dependencies:
@@ -17,6 +17,11 @@ If you'd prefer to create your own environment, here is a list of known dependen
 4. Matplotlib 3.7.0
 5. Ipykernel 6.15.0
 6. Scikit-learn 1.2.1
+7. Openpyxl 3.0.10
+8. Ipympl 0.9.3
+
+An environment with these packages can be created using the command\
+`conda create -n mta_test -c conda-forge python=3.9.16 numpy=1.23.5 pandas=1.5.3 matplotlib=3.7.0 ipykernel=6.15.0 scikit-learn=1.2.1 openpyxl=3.0.10 ipympl=0.9.3`
 
 # Usage
 The full workflow can be run via the Multi-Threshold Analysis.ipynb notebook. Supporting functions and classes can be found in the hotspot_utils.py and hotspot_classes.py files respectively. Input data should be formatted
