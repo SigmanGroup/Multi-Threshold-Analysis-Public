@@ -1,4 +1,4 @@
-name: mta_test
+name: multithreshold
 channels:
   - conda-forge
   - defaults
