@@ -248,15 +248,19 @@ def train_test_splits(temp_data_df:pd.DataFrame, split:str, test_ratio:float, ra
 def plot_hotspot(hs:Hotspot,
                  validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
                  subset:str = 'all', hide_training:bool = False,
-                 coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+                 coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = 'Yield (%)'):
     """
-    Plot a single, double, or triple threshold by calling the relevant function
+    Plot a single, double, or triple threshold by calling the relevant function.
+    Plotting style (normal, validation, or virtual screen) is determined by the presence of validation_response_data and vs_parameters.
 
     :hs: Hotspot object to plot
+    :validation_response_data: DataFrame of validation set response data (optional)
+    :vs_parameters: DataFrame of virtual screening / validation set parameters (optional)
     :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :hide_training: True or False; indicates if the training set should be hidden
     :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
     :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
-    :output_label: default '% Yield'
+    :output_label: default 'Yield (%)'
     """
     if(len(hs.thresholds)==1):
         plot_single_threshold(hs, validation_response_data, vs_parameters, subset, hide_training, coloring, gradient_color, output_label)
@@ -270,15 +274,18 @@ def plot_hotspot(hs:Hotspot,
 def plot_single_threshold(hs:Hotspot,
                           validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
                           subset:str = 'all', hide_training:bool = False,
-                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = 'Yield (%)'):
     """
     Plot a single threshold in 2 dimensions
 
     :hs: Hotspot object to plot
+    :validation_response_data: DataFrame of validation set response data (optional)
+    :vs_parameters: DataFrame of virtual screening / validation set parameters (optional)
     :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :hide_training: True or False; indicates if the training set should be hidden
     :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
     :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
-    :output_label: default '% Yield'
+    :output_label: default 'Yield (%)'
     """
 
     # Set up flags for what kind of plotting is requested
@@ -415,7 +422,11 @@ def plot_double_threshold(hs:Hotspot,
     """
     Plot a double threshold in 2 dimensions
 
+    :hs: Hotspot object to plot
+    :validation_response_data: DataFrame of validation set response data (optional)
+    :vs_parameters: DataFrame of virtual screening / validation set parameters (optional)
     :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :hide_training: True or False; indicates if the training set should be hidden
     :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
     :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
     :output_label: default 'Yield (%)'
@@ -550,14 +561,18 @@ def plot_double_threshold(hs:Hotspot,
 def plot_triple_threshold(hs:Hotspot,
                           validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
                           subset:str ='all', hide_training:bool = False,
-                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = 'Yield (%)'):
     """
     Plot a triple threshold in 3 dimensions
 
+    :hs: Hotspot object to plot
+    :validation_response_data: DataFrame of validation set response data (optional)
+    :vs_parameters: DataFrame of virtual screening / validation set parameters (optional)
     :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :hide_training: True or False; indicates if the training set should be hidden
     :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
     :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
-    :output_label: default '% Yield'
+    :output_label: default 'Yield (%)'
     """
 
     # Set up flags for what kind of plotting is requested
