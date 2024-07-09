@@ -1,13 +1,19 @@
 from __future__ import annotations
-import multiprocessing
 from hotspot_classes import Threshold, Hotspot
 import numpy as np
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 import copy
 import matplotlib.pyplot as plt
-from itertools import repeat
+from itertools import chain
 import random
+from typing import Optional
+
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from matplotlib.lines import Line2D
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 
 
 def threshold_generation(data_df:pd.DataFrame, class_weight:dict, evaluation_method:str, x_labelname_dict:dict, features:list[str] = ['empty']) -> list[Threshold]:
@@ -50,7 +56,6 @@ def threshold_generation(data_df:pd.DataFrame, class_weight:dict, evaluation_met
 
         all_thresholds.append(temp_threshold)
     return all_thresholds
-
 
 def hs_next_thresholds_fast(hs:Hotspot, all_thresholds:list[Threshold]) -> list[Hotspot]:
     """
@@ -114,7 +119,6 @@ def hs_next_thresholds(hs:Hotspot, data_df:pd.DataFrame, class_weight:dict, x_la
         all_hotspots.append(temp_hs)
 
     return all_hotspots
-
 
 def prune_hotspots(hotspots:list[Hotspot], percentage:int, evaluation_method:str) -> list[Hotspot]:
     """
@@ -240,3 +244,474 @@ def train_test_splits(temp_data_df:pd.DataFrame, split:str, test_ratio:float, ra
         plt.show()
 
     return training_set, test_set
+
+def plot_hotspot(hs:Hotspot,
+                 validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
+                 subset:str = 'all', hide_training:bool = False,
+                 coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+    """
+    Plot a single, double, or triple threshold by calling the relevant function
+
+    :hs: Hotspot object to plot
+    :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
+    :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
+    :output_label: default '% Yield'
+    """
+    if(len(hs.thresholds)==1):
+        plot_single_threshold(hs, validation_response_data, vs_parameters, subset, hide_training, coloring, gradient_color, output_label)
+    elif(len(hs.thresholds)==2):
+        plot_double_threshold(hs, validation_response_data, vs_parameters, subset, hide_training, coloring, gradient_color, output_label)
+    elif(len(hs.thresholds)==3):
+        plot_triple_threshold(hs, validation_response_data, vs_parameters, subset, hide_training, coloring, gradient_color, output_label)
+    else:
+        print(f'Unable to plot {len(hs.thresholds)} thresholds')
+
+def plot_single_threshold(hs:Hotspot,
+                          validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
+                          subset:str = 'all', hide_training:bool = False,
+                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+    """
+    Plot a single threshold in 2 dimensions
+
+    :hs: Hotspot object to plot
+    :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
+    :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
+    :output_label: default '% Yield'
+    """
+
+    # Set up flags for what kind of plotting is requested
+    plot_validation = validation_response_data is not None and vs_parameters is not None
+    plot_virtual_screening = validation_response_data is None and vs_parameters is not None 
+
+    x_col = hs.thresholds[0].index
+    plt.figure(figsize=(10, 8))
+
+    # This section auto-scales the plot
+    if plot_virtual_screening:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[:, x_col]]))
+    elif plot_validation:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[validation_response_data.index, x_col]]))
+    else:
+        x_values = hs.data_df.loc[:, x_col]
+
+    if plot_validation:
+        y_values = list(chain(*[hs.data_df.loc[:, 'response'], validation_response_data.iloc[:, 0]]))
+    else:
+        y_values = hs.data_df.loc[:, 'response']
+
+    x_min = float(min(x_values))
+    x_max = float(max(x_values))
+    y_min = float(min(y_values))
+    y_max = float(max(y_values))
+
+    dx = abs(x_min - x_max)
+    dy = abs(y_min - y_max)
+
+    x_min = x_min - abs(dx * 0.05)
+    x_max = x_max + abs(dx * 0.05)
+    y_min = y_min - abs(dy * 0.05)
+    y_max = y_max + abs(dy * 0.05)
+    
+    # Set which points to plot based on the subset parameter
+    if(subset == 'all'):
+        points_to_plot = hs.data_df.index
+    elif(subset == 'train'):
+        points_to_plot = hs.training_set
+    elif(subset == 'test'):
+        points_to_plot = hs.test_set
+    else:
+        points_to_plot = []
+    
+    # Change how the points are colored, controlled by the coloring parameter
+    if(coloring=='scaled'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'response']
+        if(plot_validation):
+            validation_mapping_cl = validation_response_data.iloc[:, 0]
+    elif(coloring=='binary'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'y_class']
+        if(plot_validation):
+            validation_mapping_cl = [1 if i >= hs.y_cut else 0 for i in validation_response_data.iloc[:, 0]]
+    else:
+        raise ValueError('coloring must be either "scaled" or "binary"')
+
+    # Plot the virtual screening set if only given parameters
+    if(plot_virtual_screening):
+        vs_x = vs_parameters.loc[:, x_col]
+        plt.scatter(vs_x, [0 for i in range(len(vs_x))], c='grey', edgecolor='black', alpha=0.5, linewidth=2, s=100, marker='x')
+
+    # Plot the main dataset if not hiding it
+    if not hide_training:
+        x = hs.data_df.loc[points_to_plot, x_col]
+        y = hs.data_df.loc[points_to_plot, 'response']
+        if plot_validation: alpha = 0.5
+        else: alpha=1
+        plt.scatter(x, y, c = mapping_cl, cmap = gradient_color, edgecolor ='black', alpha=alpha, s = 100, marker = 'o')
+
+    # Plot the validation data set if given parameters and response
+    if(plot_validation):
+        validation_x = vs_parameters.loc[validation_response_data.index, x_col]
+        validation_y = validation_response_data.iloc[:, 0]
+        plt.scatter(validation_x, validation_y, c = validation_mapping_cl, cmap = gradient_color, edgecolor = 'black', linewidth=2, s = 100, marker = 's')
+    
+    # Set the gradient bar or binary legend
+    if(coloring == 'scaled'):
+        norm = Normalize(vmin=min(mapping_cl), vmax=max(mapping_cl))
+        mappable = ScalarMappable(cmap=gradient_color, norm=norm)
+        mappable.set_array([])
+        
+        cbar = plt.colorbar(mappable, shrink=1)
+        cbar.set_label(output_label, rotation=90, size=18)
+
+    elif(coloring == 'binary'):
+        # Define the legend colors
+        colormap = plt.get_cmap(gradient_color)
+        active_color = mcolors.to_hex(colormap(1.0))
+        inactive_color = mcolors.to_hex(colormap(0.0))
+        virtual_screen_color = mcolors.to_hex('grey')
+ 
+        # Define the legend symbols
+        active_symbol = Line2D([0], [0], marker='o', color='w', label='Active Ligands', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_symbol = Line2D([0], [0], marker='o', color='w', label='Inactive Ligands', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        active_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Active Validation', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Inactive Validation', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        virtual_screen_symbol = Line2D([0], [0], marker='x', color='w', label='Virtual Screen', markerfacecolor=virtual_screen_color, markersize=10, markeredgecolor='black')
+
+        # Decide which symbols to include in the legend
+        legend_symbols = []
+        if not hide_training:
+            legend_symbols.extend([active_symbol, inactive_symbol])
+        if plot_validation:
+            legend_symbols.extend([active_validation_symbol, inactive_validation_symbol])
+        if plot_virtual_screening:
+            legend_symbols.append(virtual_screen_symbol)
+
+        plt.legend(handles=legend_symbols, fontsize=15, loc='upper right', edgecolor='black')
+    
+    # Draw the threshold line
+    plt.axvline(x=hs.thresholds[0].cut_value, color='black', linestyle='--')
+    # Draw y_cut line
+    plt.axhline(y=hs.y_cut, color='r', linestyle='--')
+
+    # Axis setup
+    plt.xlabel(f'{hs.thresholds[0].feature_label} {hs.thresholds[0].feature_name}',fontsize=25)
+    plt.ylabel(output_label,fontsize=25)
+    plt.xticks(fontsize=18)
+    plt.xlim(x_min, x_max)
+    plt.locator_params(axis='x', nbins=5)
+    plt.yticks(fontsize=18)
+    plt.ylim(y_min, y_max)
+    plt.locator_params(axis='y', nbins=4)
+
+    plt.title(f'{hs.thresholds[0].feature_name} Threshold', fontsize = 25)
+    
+    plt.show()
+
+def plot_double_threshold(hs:Hotspot, 
+                          validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
+                          subset:str = 'all', hide_training:bool = False,
+                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = 'Yield (%)'):
+    """
+    Plot a double threshold in 2 dimensions
+
+    :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
+    :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
+    :output_label: default 'Yield (%)'
+    """
+
+    # Set up flags for what kind of plotting is requested
+    plot_validation = validation_response_data is not None and vs_parameters is not None
+    plot_virtual_screening = validation_response_data is None and vs_parameters is not None
+
+    x_col,y_col = hs.thresholds[0].index, hs.thresholds[1].index
+    plt.figure(figsize=(10, 8))
+
+    # This section auto-scales the plot
+    if plot_virtual_screening:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[:, x_col]]))
+        y_values = list(chain(*[hs.data_df.loc[:, y_col], vs_parameters.loc[:, y_col]]))
+    elif plot_validation:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[validation_response_data.index, x_col]]))
+        y_values = list(chain(*[hs.data_df.loc[:, y_col], vs_parameters.loc[validation_response_data.index, y_col]]))
+    else:
+        x_values = hs.data_df.loc[:, x_col]
+        y_values = hs.data_df.loc[:, y_col]
+
+    x_min = float(min(x_values))
+    x_max = float(max(x_values))
+    y_min = float(min(y_values))
+    y_max = float(max(y_values))
+    
+    dx = abs(x_min - x_max)
+    dy = abs(y_min - y_max)
+
+    x_min = x_min - abs(dx * 0.05)
+    x_max = x_max + abs(dx * 0.05)
+    y_min = y_min - abs(dy * 0.05)
+    y_max = y_max + abs(dy * 0.05)
+    
+    # Set which points to plot based on the subset parameter
+    if(subset == 'all'):
+        points_to_plot = hs.data_df.index
+    elif(subset == 'train'):
+        points_to_plot = hs.training_set
+    elif(subset == 'test'):
+        points_to_plot = hs.test_set
+    else:
+        points_to_plot = []
+    
+    # Change how the points are colored, controlled by the coloring parameter
+    if(coloring=='scaled'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'response']
+        if(plot_validation):
+            validation_mapping_cl = validation_response_data.iloc[:, 0]
+    elif(coloring=='binary'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'y_class']
+        if(plot_validation):
+            validation_mapping_cl = [1 if i >= hs.y_cut else 0 for i in validation_response_data.iloc[:, 0]]
+    else:
+        raise ValueError('coloring must be either "scaled" or "binary"')
+
+    # Plot the virtual screening set if only given parameters
+    if(plot_virtual_screening):
+        vs_x = vs_parameters.loc[:, x_col]
+        vs_y = vs_parameters.loc[:, y_col]
+        plt.scatter(vs_x, vs_y, c='grey', edgecolor='black', alpha=0.5, linewidth=2, s=100, marker='x')
+
+    # Plot the main dataset if not hiding it
+    if not hide_training:
+        x = hs.data_df.loc[points_to_plot,x_col]
+        y = hs.data_df.loc[points_to_plot,y_col]
+        if plot_validation: alpha = 0.5
+        else: alpha=1
+        plt.scatter(x, y, c=mapping_cl,cmap=gradient_color, edgecolor='black', alpha=alpha, s=100, marker='o')  
+
+    # Plot the validation data set if given parameters and response
+    if(plot_validation):
+        validation_x = vs_parameters.loc[validation_response_data.index, x_col]
+        validation_y = vs_parameters.loc[validation_response_data.index, y_col]
+        plt.scatter(validation_x, validation_y, c=validation_mapping_cl, cmap=gradient_color, edgecolor='black', linewidth=2, s=100, marker='s')
+
+    # Draw threshold lines
+    plt.axhline(y=hs.thresholds[1].cut_value, color='black', linestyle='--')
+    plt.axvline(x=hs.thresholds[0].cut_value, color='black', linestyle='--')
+    
+    # Set the gradient bar or binary legend
+    if(coloring == 'scaled'):
+        norm = Normalize(vmin=min(mapping_cl), vmax=max(mapping_cl))
+        mappable = ScalarMappable(cmap=gradient_color, norm=norm)
+        mappable.set_array([])
+        
+        cbar = plt.colorbar(mappable, shrink=1)
+        cbar.set_label(output_label, rotation=90, size=18)
+
+    elif(coloring == 'binary'):
+        # Define the legend colors
+        colormap = plt.get_cmap(gradient_color)
+        active_color = mcolors.to_hex(colormap(1.0))
+        inactive_color = mcolors.to_hex(colormap(0.0))
+        virtual_screen_color = mcolors.to_hex('grey')
+ 
+        # Define the legend symbols
+        active_symbol = Line2D([0], [0], marker='o', color='w', label='Active Ligands', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_symbol = Line2D([0], [0], marker='o', color='w', label='Inactive Ligands', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        active_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Active Validation', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Inactive Validation', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        virtual_screen_symbol = Line2D([0], [0], marker='x', color='w', label='Virtual Screen', markerfacecolor=virtual_screen_color, markersize=10, markeredgecolor='black')
+
+        # Decide which symbols to include in the legend
+        legend_symbols = []
+        if not hide_training:
+            legend_symbols.extend([active_symbol, inactive_symbol])
+        if plot_validation:
+            legend_symbols.extend([active_validation_symbol, inactive_validation_symbol])
+        if plot_virtual_screening:
+            legend_symbols.append(virtual_screen_symbol)
+
+        plt.legend(handles=legend_symbols, fontsize=15, loc='upper right', edgecolor='black')
+
+    # Axis setup
+    plt.xlabel(f'{hs.thresholds[0].feature_label} {hs.thresholds[0].feature_name}', fontsize = 15)
+    plt.ylabel(f'{hs.thresholds[1].feature_label} {hs.thresholds[1].feature_name}', fontsize = 15)
+    plt.xticks(fontsize = 18)
+    plt.xlim(x_min, x_max)
+    plt.locator_params(axis = 'x', nbins = 5)
+    plt.yticks(fontsize = 18)
+    plt.ylim(y_min, y_max)
+    plt.locator_params(axis = 'y', nbins = 4)
+
+    # Print the title of the plot
+    plt.title(f'{hs.thresholds[0].feature_name} x {hs.thresholds[1].feature_name}', fontsize = 20)
+
+    plt.show()
+
+def plot_triple_threshold(hs:Hotspot,
+                          validation_response_data:Optional[pd.DataFrame] = None, vs_parameters:Optional[pd.DataFrame] = None,
+                          subset:str ='all', hide_training:bool = False,
+                          coloring:str = 'scaled', gradient_color:str = 'Oranges', output_label:str = '% Yield'):
+    """
+    Plot a triple threshold in 3 dimensions
+
+    :subset: 'all', 'train', or 'test'; indicates which subset to show on the plot
+    :coloring: 'scaled' or 'binary'; indicates if points should be colored based on actual output values or by output category
+    :gradient_color: the color scheme applied to the heatmap, default 'Oranges'
+    :output_label: default '% Yield'
+    """
+
+    # Set up flags for what kind of plotting is requested
+    plot_validation = validation_response_data is not None and vs_parameters is not None
+    plot_virtual_screening = validation_response_data is None and vs_parameters is not None 
+
+    x_col,y_col,z_col = hs.thresholds[0].index, hs.thresholds[1].index, hs.thresholds[2].index
+    
+    # This section auto-scales the plot
+    if plot_virtual_screening:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[:, x_col]]))
+        y_values = list(chain(*[hs.data_df.loc[:, y_col], vs_parameters.loc[:, y_col]]))
+        z_values = list(chain(*[hs.data_df.loc[:, z_col], vs_parameters.loc[:, z_col]]))
+    elif plot_validation:
+        x_values = list(chain(*[hs.data_df.loc[:, x_col], vs_parameters.loc[validation_response_data.index, x_col]]))
+        y_values = list(chain(*[hs.data_df.loc[:, y_col], vs_parameters.loc[validation_response_data.index, y_col]]))
+        z_values = list(chain(*[hs.data_df.loc[:, z_col], vs_parameters.loc[validation_response_data.index, z_col]]))
+    else:
+        x_values = hs.data_df.loc[:, x_col]
+        y_values = hs.data_df.loc[:, y_col]
+        z_values = hs.data_df.loc[:, z_col]
+
+    x_min = float(min(x_values))
+    x_max = float(max(x_values))
+    y_min = float(min(y_values))
+    y_max = float(max(y_values))
+    z_min = float(min(z_values))
+    z_max = float(max(z_values))
+
+    dx = abs(x_min - x_max)
+    dy = abs(y_min - y_max)
+    dz = abs(z_min - z_max)
+
+    x_min = x_min - abs(dx * 0.05)
+    x_max = x_max + abs(dx * 0.05)
+    y_min = y_min - abs(dy * 0.05)
+    y_max = y_max + abs(dy * 0.05)
+    z_min = z_min - abs(dz * 0.05)
+    z_max = z_max + abs(dz * 0.05)
+
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_subplot(111, projection = '3d')
+
+    # Set which points to plot based on the subset parameter
+    if(subset == 'all'):
+        points_to_plot = hs.data_df.index
+    elif(subset == 'train'):
+        points_to_plot = hs.training_set
+    elif(subset == 'test'):
+        points_to_plot = hs.test_set
+    else:
+        points_to_plot = []
+        
+    # Change how the points are colored, controlled by the coloring parameter
+    if(coloring=='scaled'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'response']
+        if(plot_validation):
+            validation_mapping_cl = validation_response_data.iloc[:, 0]
+    elif(coloring=='binary'):
+        mapping_cl = hs.data_df.loc[points_to_plot, 'y_class']
+        if(plot_validation):
+            validation_mapping_cl = [1 if i >= hs.y_cut else 0 for i in validation_response_data.iloc[:, 0]]
+    else:
+        raise ValueError('coloring must be either "scaled" or "binary"')
+
+    # Plot the virtual screening set if only given parameters
+    if(plot_virtual_screening):
+        vs_x = vs_parameters.loc[:, x_col]
+        vs_y = vs_parameters.loc[:, y_col]
+        vs_z = vs_parameters.loc[:, z_col]
+        ax.scatter(vs_x, vs_y, vs_z, c='grey', linewidth=2, alpha=0.5, marker="x", s=50, edgecolors='k')
+    
+    # Plot the main dataset if not hiding it
+    if not hide_training:
+        x = hs.data_df.loc[points_to_plot,x_col]
+        y = hs.data_df.loc[points_to_plot,y_col]
+        z = hs.data_df.loc[points_to_plot,z_col]
+        if plot_validation: alpha = 0.5
+        else: alpha=0.95
+        ax.scatter(x, y, z, c=mapping_cl, cmap=gradient_color, alpha=alpha, marker="o", s=50, edgecolors='k')
+
+    # Plot the validation data set if given parameters and response
+    if(plot_validation):
+        validation_x = vs_parameters.loc[validation_response_data.index, x_col]
+        validation_y = vs_parameters.loc[validation_response_data.index, y_col]
+        validation_z = vs_parameters.loc[validation_response_data.index, z_col]
+        ax.scatter(validation_x, validation_y, validation_z, c=validation_mapping_cl, cmap=gradient_color, linewidth=2, alpha=0.95, marker="s", s=50, edgecolors='k')
+        
+    # Plot the z-axis threshold
+    temp_x = np.linspace(x_min, x_max, num=10)
+    temp_y = np.linspace(y_min, y_max, num=10)
+    temp_x, temp_y = np.meshgrid(temp_x, temp_y)
+    temp_z = hs.thresholds[2].cut_value + 0 * temp_x + 0 * temp_y
+    ax.plot_surface(temp_x, temp_y, temp_z, alpha=0.15, color='gray')
+    
+    # Plot the x-axis threshold
+    temp_y = np.linspace(y_min, y_max, num=10)
+    temp_z = np.linspace(z_min, z_max, num=10)
+    temp_z, temp_y = np.meshgrid(temp_z, temp_y)
+    temp_x = hs.thresholds[0].cut_value + 0 * temp_z + 0 * temp_y
+    ax.plot_surface(temp_x, temp_y, temp_z, alpha=0.15, color='gray') 
+    
+    # Plot the y-axis threshold
+    temp_x = np.linspace(x_min, x_max, num = 10)
+    temp_z = np.linspace(z_min, z_max, num = 10)
+    temp_x, temp_z = np.meshgrid(temp_x, temp_z)
+    temp_y = hs.thresholds[1].cut_value + 0 * temp_x + 0 * temp_z
+    ax.plot_surface(temp_x, temp_y, temp_z, alpha=0.15, color='gray')
+    
+    plt.xticks(fontsize = 10) 
+    plt.yticks(fontsize = 10)
+
+    # Set axes labels
+    ax.set_xlabel(f'{hs.thresholds[0].feature_label} {hs.thresholds[0].feature_name}',fontsize=12.5)
+    ax.set_ylabel(f'{hs.thresholds[1].feature_label} {hs.thresholds[1].feature_name}',fontsize=12.5)
+    ax.set_zlabel(f'{hs.thresholds[2].feature_label} {hs.thresholds[2].feature_name}',fontsize=12.5)
+    plt.locator_params(axis='y', nbins=8)
+
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_zlim(z_min, z_max)
+    
+    # Set the gradient bar on the side
+    if(coloring == 'scaled'):
+        norm = Normalize(vmin=min(mapping_cl), vmax=max(mapping_cl))
+        mappable = ScalarMappable(cmap=gradient_color, norm=norm)
+        mappable.set_array([])
+        
+        cbar = plt.colorbar(mappable, shrink=0.5)
+        cbar.set_label(output_label, rotation=90, size=18)
+
+    elif(coloring == 'binary'):
+        # Define the legend colors
+        colormap = plt.get_cmap(gradient_color)
+        active_color = mcolors.to_hex(colormap(1.0))
+        inactive_color = mcolors.to_hex(colormap(0.0))
+        virtual_screen_color = mcolors.to_hex('grey')
+ 
+        # Define the legend symbols
+        active_symbol = Line2D([0], [0], marker='o', color='w', label='Active Ligands', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_symbol = Line2D([0], [0], marker='o', color='w', label='Inactive Ligands', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        active_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Active Validation', markerfacecolor=active_color, markersize=10, markeredgecolor='black')
+        inactive_validation_symbol = Line2D([0], [0], marker='s', color='w', label='Inactive Validation', markerfacecolor=inactive_color, markersize=10, markeredgecolor='black')
+        virtual_screen_symbol = Line2D([0], [0], marker='x', color='w', label='Virtual Screen', markerfacecolor=virtual_screen_color, markersize=10, markeredgecolor='black')
+
+        # Decide which symbols to include in the legend
+        legend_symbols = []
+        if not hide_training:
+            legend_symbols.extend([active_symbol, inactive_symbol])
+        if plot_validation:
+            legend_symbols.extend([active_validation_symbol, inactive_validation_symbol])
+        if plot_virtual_screening:
+            legend_symbols.append(virtual_screen_symbol)
+
+        plt.legend(handles=legend_symbols, fontsize=15, loc='upper right', edgecolor='black')
+
+    plt.show()
